@@ -188,16 +188,77 @@ static void test_adapter(void)
     ki_td_soft_renderer_destroy(&renderer);
 }
 
+static void test_atlas_and_layers(void)
+{
+    static const uint8_t nine_pixels[36] = {
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+        255, 255, 0, 255, 20, 30, 40, 255, 0, 255, 255, 255,
+        255, 0, 255, 255, 255, 255, 255, 255, 80, 90, 100, 255
+    };
+    static const uint8_t atlas_pixels[16] = {
+        255, 0, 0, 255, 0, 255, 0, 255,
+        0, 0, 255, 255, 255, 255, 0, 255
+    };
+    static const uint32_t cells[4] = {3u, 2u, 1u, 0u};
+    ki_td_rgba8 nine = ki_td_rgba8_make(nine_pixels, 3, 3);
+    ki_td_rgba8 atlas = ki_td_rgba8_make(atlas_pixels, 2, 2);
+    ki_td_rgba8 center = ki_td_rgba8_subimage(&nine, 1, 1, 1, 1);
+    ki_td_rgba8 invalid = ki_td_rgba8_subimage(&nine, 2, 2, 2, 2);
+    ki_td_nine_slice slice;
+    ki_td_tile_batch batch = {
+        &atlas, cells, 4u, 2u, 2u, 2u, 2u, UINT32_MAX,
+        0.0f, 0.0f, 1, 1, 1.0f
+    };
+    ki_td_sprite_command commands[4] = {
+        {&atlas, 0, 0, 0, 0, 1, 2, 1, 0},
+        {&atlas, 0, 0, 0, 0, 1, 1, 8, 2},
+        {&atlas, 0, 0, 0, 0, 1, 1, 8, 1},
+        {&atlas, 0, 0, 0, 0, 1, 1, 2, 0}
+    };
+    size_t order[4] = {0};
+    ki_td_soft_renderer renderer = {0};
+    ki_td_view view = {.scale = 1.0f};
+    EXPECT(ki_td_rgba8_is_valid(&center));
+    EXPECT(center.pixels == nine_pixels + 16u && center.stride == 12u);
+    EXPECT(!ki_td_rgba8_is_valid(&invalid));
+    EXPECT(ki_td_nine_slice_init(&slice, &nine, 1, 1, 1, 1));
+    EXPECT(ki_td_tile_batch_is_valid(&batch));
+    EXPECT(ki_td_sprite_order(commands, 4u, order, 4u) == 4u);
+    EXPECT(order[0] == 3u && order[1] == 2u && order[2] == 1u &&
+           order[3] == 0u);
+    EXPECT(ki_td_sprite_order(commands, 4u, order, 3u) == 0u);
+    EXPECT(ki_td_soft_renderer_init(&renderer, 8, 8));
+    ki_td_soft_clear(&renderer, 0u);
+    ki_td_soft_nine_slice(&renderer, &view, 1.0f, 1.0f, 5, 5, &slice,
+                          1.0f);
+    EXPECT(renderer.canvas.px[1 + renderer.canvas.w] ==
+           UINT32_C(0xffff0000));
+    EXPECT(renderer.canvas.px[3 + 3 * renderer.canvas.w] ==
+           UINT32_C(0xff141e28));
+    EXPECT(renderer.canvas.px[5 + 5 * renderer.canvas.w] ==
+           UINT32_C(0xff505a64));
+    ki_td_soft_clear(&renderer, 0u);
+    ki_td_soft_tile_batch(&renderer, &view, &batch);
+    EXPECT(renderer.canvas.px[0] == UINT32_C(0xffffff00));
+    EXPECT(renderer.canvas.px[1] == UINT32_C(0xff0000ff));
+    EXPECT(renderer.canvas.px[renderer.canvas.w] == UINT32_C(0xff00ff00));
+    EXPECT(renderer.canvas.px[1 + renderer.canvas.w] ==
+           UINT32_C(0xffff0000));
+    ki_td_soft_sprite_layers(&renderer, &view, commands, 4u, order, 4u);
+    ki_td_soft_renderer_destroy(&renderer);
+}
+
 int main(void)
 {
     test_fit_and_transform();
     test_shake();
     test_renderer_lifetime();
     test_adapter();
+    test_atlas_and_layers();
     if (failures != 0) {
         fprintf(stderr, "FAIL: %d top-down checks\n", failures);
         return 1;
     }
-    printf("PASS: top-down view, shake, lifecycle, primitives, and RGBA adapter\n");
+    printf("PASS: top-down view, primitives, atlas batches, nine-slice, and layers\n");
     return 0;
 }

@@ -1,6 +1,7 @@
 #include "kilix_top_down_soft.h"
 #include "kilix_top_down_view.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -30,6 +31,90 @@ bool ki_td_rgba8_is_valid(const ki_td_rgba8 *image)
         return false;
     return image->stride >= (size_t)image->width * 4u &&
            (size_t)image->height <= SIZE_MAX / image->stride;
+}
+
+ki_td_rgba8 ki_td_rgba8_subimage(const ki_td_rgba8 *image, int x, int y,
+                                  int width, int height)
+{
+    ki_td_rgba8 result = {0};
+    if (!ki_td_rgba8_is_valid(image) || x < 0 || y < 0 || width <= 0 ||
+        height <= 0 || x >= image->width || y >= image->height ||
+        width > image->width - x || height > image->height - y)
+        return result;
+    result.pixels = image->pixels + (size_t)y * image->stride +
+                    (size_t)x * 4u;
+    result.width = width;
+    result.height = height;
+    result.stride = image->stride;
+    return result;
+}
+
+bool ki_td_nine_slice_init(ki_td_nine_slice *slice,
+                           const ki_td_rgba8 *image, int left, int top,
+                           int right, int bottom)
+{
+    if (!slice || !ki_td_rgba8_is_valid(image) || left <= 0 || top <= 0 ||
+        right <= 0 || bottom <= 0 || left >= image->width - right ||
+        top >= image->height - bottom)
+        return false;
+    slice->image = *image;
+    slice->left = left;
+    slice->top = top;
+    slice->right = right;
+    slice->bottom = bottom;
+    return true;
+}
+
+bool ki_td_tile_batch_is_valid(const ki_td_tile_batch *batch)
+{
+    uint64_t cell_count;
+    if (!batch || !ki_td_rgba8_is_valid(batch->atlas) || !batch->cells ||
+        batch->columns == 0u || batch->rows == 0u ||
+        batch->atlas_columns == 0u || batch->atlas_rows == 0u ||
+        batch->tile_width <= 0 || batch->tile_height <= 0 ||
+        !isfinite(batch->x) || !isfinite(batch->y) ||
+        !isfinite(batch->alpha) || batch->alpha <= 0.0f ||
+        batch->atlas_columns > (uint32_t)INT_MAX ||
+        batch->atlas_rows > (uint32_t)INT_MAX ||
+        batch->atlas->width % (int)batch->atlas_columns != 0 ||
+        batch->atlas->height % (int)batch->atlas_rows != 0)
+        return false;
+    cell_count = (uint64_t)batch->columns * (uint64_t)batch->rows;
+    return cell_count <= SIZE_MAX && batch->cell_count >= (size_t)cell_count;
+}
+
+static int sprite_compare(const ki_td_sprite_command *commands,
+                          size_t first, size_t second)
+{
+    const ki_td_sprite_command *a = &commands[first];
+    const ki_td_sprite_command *b = &commands[second];
+    float a_y = isfinite(a->sort_y) ? a->sort_y : 0.0f;
+    float b_y = isfinite(b->sort_y) ? b->sort_y : 0.0f;
+    if (a->layer != b->layer) return a->layer < b->layer ? -1 : 1;
+    if (a_y != b_y) return a_y < b_y ? -1 : 1;
+    if (a->order != b->order) return a->order < b->order ? -1 : 1;
+    return first < second ? -1 : first > second ? 1 : 0;
+}
+
+size_t ki_td_sprite_order(const ki_td_sprite_command *commands, size_t count,
+                          size_t *scratch, size_t scratch_count)
+{
+    size_t index;
+    if (count == 0u) return 0u;
+    if (!commands || !scratch || scratch_count < count) return 0u;
+    for (index = 0u; index < count; ++index) {
+        size_t cursor = index;
+        scratch[index] = index;
+        while (cursor > 0u &&
+               sprite_compare(commands, scratch[cursor],
+                              scratch[cursor - 1u]) < 0) {
+            size_t swap = scratch[cursor];
+            scratch[cursor] = scratch[cursor - 1u];
+            scratch[cursor - 1u] = swap;
+            --cursor;
+        }
+    }
+    return count;
 }
 
 bool ki_td_soft_renderer_resize(ki_td_soft_renderer *renderer, int width,
@@ -334,5 +419,151 @@ void ki_td_soft_rgba_pixel_art(ki_td_soft_renderer *renderer,
                         renderer, pixel_x + dx, pixel_y + dy, rgb,
                         alpha * (pixel[3] / 255.0f));
         }
+    }
+}
+
+static void draw_subimage(ki_td_soft_renderer *renderer,
+                          const ki_td_view *view, float x, float y,
+                          int width, int height, const ki_td_rgba8 *source,
+                          int source_x, int source_y, int source_width,
+                          int source_height, float alpha)
+{
+    ki_td_rgba8 region = ki_td_rgba8_subimage(source, source_x, source_y,
+                                               source_width, source_height);
+    if (ki_td_rgba8_is_valid(&region))
+        ki_td_soft_rgba_resized(renderer, view, x, y, &region, width, height,
+                                alpha);
+}
+
+void ki_td_soft_nine_slice(ki_td_soft_renderer *renderer,
+                           const ki_td_view *view, float x, float y,
+                           int width, int height,
+                           const ki_td_nine_slice *slice, float alpha)
+{
+    int source_center_width;
+    int source_center_height;
+    int center_width;
+    int center_height;
+    int source_right;
+    int source_bottom;
+    int destination_right;
+    int destination_bottom;
+    if (!renderer || !view || !slice || !isfinite(x) || !isfinite(y) ||
+        !isfinite(alpha) || alpha <= 0.0f ||
+        !ki_td_rgba8_is_valid(&slice->image) || slice->left <= 0 ||
+        slice->top <= 0 || slice->right <= 0 || slice->bottom <= 0 ||
+        slice->right >= slice->image.width ||
+        slice->left >= slice->image.width - slice->right ||
+        slice->bottom >= slice->image.height ||
+        slice->top >= slice->image.height - slice->bottom ||
+        width < slice->left || width - slice->left < slice->right ||
+        height < slice->top || height - slice->top < slice->bottom)
+        return;
+    source_center_width = slice->image.width - slice->left - slice->right;
+    source_center_height = slice->image.height - slice->top - slice->bottom;
+    if (source_center_width <= 0 || source_center_height <= 0) return;
+    center_width = width - slice->left - slice->right;
+    center_height = height - slice->top - slice->bottom;
+    source_right = slice->image.width - slice->right;
+    source_bottom = slice->image.height - slice->bottom;
+    destination_right = width - slice->right;
+    destination_bottom = height - slice->bottom;
+
+    draw_subimage(renderer, view, x, y, slice->left, slice->top,
+                  &slice->image, 0, 0, slice->left, slice->top, alpha);
+    if (center_width > 0)
+        draw_subimage(renderer, view, x + (float)slice->left, y,
+                      center_width, slice->top, &slice->image, slice->left,
+                      0, source_center_width, slice->top, alpha);
+    draw_subimage(renderer, view, x + (float)destination_right, y,
+                  slice->right, slice->top, &slice->image, source_right, 0,
+                  slice->right, slice->top, alpha);
+    if (center_height > 0)
+        draw_subimage(renderer, view, x, y + (float)slice->top,
+                      slice->left, center_height, &slice->image, 0, slice->top,
+                      slice->left, source_center_height, alpha);
+    if (center_width > 0 && center_height > 0)
+        draw_subimage(renderer, view, x + (float)slice->left,
+                      y + (float)slice->top, center_width, center_height,
+                      &slice->image, slice->left, slice->top,
+                      source_center_width, source_center_height, alpha);
+    if (center_height > 0)
+        draw_subimage(renderer, view, x + (float)destination_right,
+                      y + (float)slice->top, slice->right, center_height,
+                      &slice->image, source_right, slice->top, slice->right,
+                      source_center_height, alpha);
+    draw_subimage(renderer, view, x, y + (float)destination_bottom,
+                  slice->left, slice->bottom, &slice->image, 0, source_bottom,
+                  slice->left, slice->bottom, alpha);
+    if (center_width > 0)
+        draw_subimage(renderer, view, x + (float)slice->left,
+                      y + (float)destination_bottom, center_width,
+                      slice->bottom, &slice->image, slice->left,
+                      source_bottom, source_center_width, slice->bottom,
+                      alpha);
+    draw_subimage(renderer, view, x + (float)destination_right,
+                  y + (float)destination_bottom, slice->right, slice->bottom,
+                  &slice->image, source_right, source_bottom, slice->right,
+                  slice->bottom, alpha);
+}
+
+void ki_td_soft_tile_batch(ki_td_soft_renderer *renderer,
+                           const ki_td_view *view,
+                           const ki_td_tile_batch *batch)
+{
+    uint32_t atlas_cell_width;
+    uint32_t atlas_cell_height;
+    uint64_t atlas_count;
+    uint32_t row;
+    if (!renderer || !view || !ki_td_tile_batch_is_valid(batch)) return;
+    atlas_cell_width = (uint32_t)batch->atlas->width / batch->atlas_columns;
+    atlas_cell_height = (uint32_t)batch->atlas->height / batch->atlas_rows;
+    atlas_count = (uint64_t)batch->atlas_columns * batch->atlas_rows;
+    for (row = 0u; row < batch->rows; ++row) {
+        uint32_t column;
+        for (column = 0u; column < batch->columns; ++column) {
+            size_t index = (size_t)row * batch->columns + column;
+            uint32_t cell = batch->cells[index];
+            uint32_t source_column;
+            uint32_t source_row;
+            if (cell == batch->empty_cell || (uint64_t)cell >= atlas_count)
+                continue;
+            source_column = cell % batch->atlas_columns;
+            source_row = cell / batch->atlas_columns;
+            draw_subimage(renderer, view,
+                batch->x + (float)column * (float)batch->tile_width,
+                batch->y + (float)row * (float)batch->tile_height,
+                batch->tile_width, batch->tile_height, batch->atlas,
+                (int)(source_column * atlas_cell_width),
+                (int)(source_row * atlas_cell_height),
+                (int)atlas_cell_width, (int)atlas_cell_height, batch->alpha);
+        }
+    }
+}
+
+void ki_td_soft_sprite_layers(ki_td_soft_renderer *renderer,
+                              const ki_td_view *view,
+                              const ki_td_sprite_command *commands,
+                              size_t count, size_t *scratch,
+                              size_t scratch_count)
+{
+    size_t ordered;
+    size_t cursor;
+    if (!renderer || !view) return;
+    ordered = ki_td_sprite_order(commands, count, scratch, scratch_count);
+    if (ordered != count) return;
+    for (cursor = 0u; cursor < ordered; ++cursor) {
+        const ki_td_sprite_command *command = &commands[scratch[cursor]];
+        if (!ki_td_rgba8_is_valid(command->image) ||
+            !isfinite(command->x) || !isfinite(command->y) ||
+            !isfinite(command->alpha) || command->alpha <= 0.0f)
+            continue;
+        if (command->width > 0 && command->height > 0)
+            ki_td_soft_rgba_resized(renderer, view, command->x, command->y,
+                                    command->image, command->width,
+                                    command->height, command->alpha);
+        else if (command->width == 0 && command->height == 0)
+            ki_td_soft_rgba_pixel_art(renderer, view, command->x, command->y,
+                                      command->image, command->alpha);
     }
 }

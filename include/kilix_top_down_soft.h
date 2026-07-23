@@ -32,6 +32,59 @@ typedef struct ki_td_rgba8 {
 
 ki_td_rgba8 ki_td_rgba8_make(const void *pixels, int width, int height);
 bool ki_td_rgba8_is_valid(const ki_td_rgba8 *image);
+ki_td_rgba8 ki_td_rgba8_subimage(const ki_td_rgba8 *image, int x, int y,
+                                  int width, int height);
+
+typedef struct ki_td_nine_slice {
+    ki_td_rgba8 image;
+    int left;
+    int top;
+    int right;
+    int bottom;
+} ki_td_nine_slice;
+
+bool ki_td_nine_slice_init(ki_td_nine_slice *slice,
+                           const ki_td_rgba8 *image, int left, int top,
+                           int right, int bottom);
+
+/* Row-major atlas tile map. UINT32_MAX is a conventional empty_cell value,
+ * but callers may choose another sentinel. */
+typedef struct ki_td_tile_batch {
+    const ki_td_rgba8 *atlas;
+    const uint32_t *cells;
+    size_t cell_count;
+    uint32_t columns;
+    uint32_t rows;
+    uint32_t atlas_columns;
+    uint32_t atlas_rows;
+    uint32_t empty_cell;
+    float x;
+    float y;
+    int tile_width;
+    int tile_height;
+    float alpha;
+} ki_td_tile_batch;
+
+bool ki_td_tile_batch_is_valid(const ki_td_tile_batch *batch);
+
+/* Games assign semantic layers and sort_y. order is a deterministic tie
+ * breaker; original array position breaks any remaining ties. */
+typedef struct ki_td_sprite_command {
+    const ki_td_rgba8 *image;
+    float x;
+    float y;
+    int width;
+    int height;
+    float alpha;
+    int layer;
+    float sort_y;
+    uint32_t order;
+} ki_td_sprite_command;
+
+/* Writes stable draw indices into caller-owned scratch and performs no
+ * allocation. Returns zero when count exceeds scratch_count. */
+size_t ki_td_sprite_order(const ki_td_sprite_command *commands, size_t count,
+                          size_t *scratch, size_t scratch_count);
 
 /* A renderer must be zero-initialized before its first init/resize/destroy.
  * Resize is transactional: failure preserves the active canvas and RGBA
@@ -96,6 +149,19 @@ void ki_td_soft_rgba_rotated(ki_td_soft_renderer *renderer,
 void ki_td_soft_rgba_pixel_art(ki_td_soft_renderer *renderer,
                                const ki_td_view *view, float x, float y,
                                const ki_td_rgba8 *image, float alpha);
+
+void ki_td_soft_nine_slice(ki_td_soft_renderer *renderer,
+                           const ki_td_view *view, float x, float y,
+                           int width, int height,
+                           const ki_td_nine_slice *slice, float alpha);
+void ki_td_soft_tile_batch(ki_td_soft_renderer *renderer,
+                           const ki_td_view *view,
+                           const ki_td_tile_batch *batch);
+void ki_td_soft_sprite_layers(ki_td_soft_renderer *renderer,
+                              const ki_td_view *view,
+                              const ki_td_sprite_command *commands,
+                              size_t count, size_t *scratch,
+                              size_t scratch_count);
 
 #ifdef __cplusplus
 }

@@ -42,8 +42,11 @@ Then draw in a fixed order:
 5. Reset the offset before drawing screen-space overlays.
 6. Pack and present the RGBA buffer.
 
-The engine does not sort actors. A game that wants strict layer order,
-Y-sorting, or an explicit render queue owns that decision.
+For an actor pass, assign each `ki_td_sprite_command` a semantic `layer`,
+`sort_y`, and deterministic `order`, then pass caller-owned index scratch to
+`ki_td_soft_sprite_layers`. The engine performs stable ordering without an
+allocation. The game still owns the meanings of layers and the decision about
+which actors enter the pass.
 
 ## Determinism and threading
 
@@ -62,6 +65,12 @@ threads subject to the caller's allocator and presentation rules.
 RGBA, not premultiplied. The data must remain alive for the duration of a draw
 call. A stride larger than `width * 4` is supported. Invalid descriptors and
 non-positive resized dimensions draw nothing.
+
+`ki_td_rgba8_subimage` creates a borrowed descriptor with the parent stride;
+the source pixels must outlive every draw. `ki_td_soft_tile_batch` divides an
+atlas into an exact grid and draws a row-major cell array. `ki_td_nine_slice`
+preserves corner sizes and nearest-stretches its edges and center; destination
+dimensions smaller than the combined borders draw nothing.
 
 The logical sprite functions draw each source pixel as one logical unit. The
 pixel-art fast path writes integer-sized blocks when the view scale is within

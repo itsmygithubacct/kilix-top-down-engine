@@ -77,11 +77,12 @@ prefers an integer scale at normal sizes and becomes fractional below a chosen
 threshold. A minimum scale can preserve readable pixels by cropping on very
 small displays.
 
-The soft adapter accepts straight RGBA8 data—the format commonly emitted by
-Kilix asset compilers. Alpha values below 8 are transparent, and nearest
-resizing plus quarter-turn rotation preserve pixel-art edges. It intentionally
-does not reinterpret these bytes as `soft-raster`'s premultiplied canvas
-format.
+The soft adapter accepts straight RGBA8 data—the format emitted by
+`kilix-assets`. Alpha values below 8 are transparent, and nearest resizing plus
+quarter-turn rotation preserve pixel-art edges. Borrowed atlas subregions,
+nine-slice panels, row-major tile batches, and caller-buffered stable sprite
+layer ordering all render without allocating. The adapter intentionally does
+not reinterpret these bytes as `soft-raster`'s premultiplied canvas format.
 
 See [integration.md](docs/integration.md) for lifecycle, resize, draw order,
 and ownership guidance.
@@ -95,13 +96,16 @@ The engine owns:
 - deterministic camera-shake offsets;
 - transformed rectangles, circles, ellipses, and lines;
 - straight-alpha logical, screen-space, resized, rotated, and integer-scale
-  sprite paths.
+  sprite paths;
+- borrowed atlas subregions, nine-slice drawing, tile batches, and stable
+  caller-buffered sprite ordering.
 
 The game owns:
 
 - simulation state and random number generation;
 - tile meanings, collision, rooms, quests, actors, and draw-pass ordering;
-- art catalogs, animation policy, HUD, maps, menus, dialogue, and screens;
+- art catalogs, animation policy, semantic layer assignment, maps, dialogue,
+  and screens;
 - Kitty terminal lifecycle, `kitty-input`, audio, and saves.
 
 That boundary keeps presentation deterministic without forcing different
