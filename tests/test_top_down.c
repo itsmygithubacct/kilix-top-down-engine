@@ -83,18 +83,27 @@ static void test_fit_and_transform(void)
     EXPECT(ki_td_screen_x(&view, -0.25f) == 10);
     EXPECT(ki_td_screen_x(&view, -0.75f) == 9);
     EXPECT(ki_td_view_visible_cells(
-        &view, (ki_td_rect){10, 20, 40, 20}, 5, 5, 10, 8, 0, &bounds));
+        &view, (ki_td_rect){10, 20, 40, 20}, 0.0f, 0.0f,
+        5, 5, 10, 8, 0, &bounds));
     EXPECT(bounds.first_column == 0 && bounds.first_row == 0);
     EXPECT(bounds.column_count == 4 && bounds.row_count == 2);
     EXPECT(ki_td_view_visible_cells(
-        &view, (ki_td_rect){20, 30, 20, 20}, 5, 5, 10, 8, 1, &bounds));
+        &view, (ki_td_rect){20, 30, 20, 20}, 0.0f, 0.0f,
+        5, 5, 10, 8, 1, &bounds));
     EXPECT(bounds.first_column == 0 && bounds.first_row == 0);
     EXPECT(bounds.column_count == 4 && bounds.row_count == 4);
     EXPECT(ki_td_view_visible_cells(
-        &view, (ki_td_rect){200, 200, 20, 20}, 5, 5, 10, 8, 0, &bounds));
+        &view, (ki_td_rect){200, 200, 20, 20}, 0.0f, 0.0f,
+        5, 5, 10, 8, 0, &bounds));
     EXPECT(bounds.column_count == 0 && bounds.row_count == 0);
     EXPECT(!ki_td_view_visible_cells(
-        &view, (ki_td_rect){0, 0, 0, 20}, 5, 5, 10, 8, 0, &bounds));
+        &view, (ki_td_rect){0, 0, 0, 20}, 0.0f, 0.0f,
+        5, 5, 10, 8, 0, &bounds));
+    EXPECT(ki_td_view_visible_cells(
+        &view, (ki_td_rect){20, 30, 20, 20}, 5.0f, 5.0f,
+        5, 5, 10, 8, 0, &bounds));
+    EXPECT(bounds.first_column == 0 && bounds.first_row == 0);
+    EXPECT(bounds.column_count == 2 && bounds.row_count == 2);
 }
 
 static void test_shake(void)

@@ -36,6 +36,7 @@ bool ki_td_screen_to_logical(const ki_td_view *view, float screen_x,
  * caller-selected number of cells before clipping. */
 bool ki_td_view_visible_cells(const ki_td_view *view,
                               ki_td_rect screen_bounds,
+                              float grid_origin_x, float grid_origin_y,
                               int cell_width, int cell_height,
                               int columns, int rows, int padding,
                               ki_td_cell_bounds *bounds);

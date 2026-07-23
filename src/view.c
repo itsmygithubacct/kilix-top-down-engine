@@ -141,6 +141,7 @@ static int clipped_grid_edge(double logical, int cell_size, int limit,
 
 bool ki_td_view_visible_cells(const ki_td_view *view,
                               ki_td_rect screen_bounds,
+                              float grid_origin_x, float grid_origin_y,
                               int cell_width, int cell_height,
                               int columns, int rows, int padding,
                               ki_td_cell_bounds *bounds)
@@ -157,6 +158,7 @@ bool ki_td_view_visible_cells(const ki_td_view *view,
     int last_row;
     if (!view || !bounds || !rect_is_valid(screen_bounds) ||
         !isfinite(view->scale) || view->scale <= 0.0f ||
+        !isfinite(grid_origin_x) || !isfinite(grid_origin_y) ||
         cell_width <= 0 || cell_height <= 0 || columns <= 0 || rows <= 0 ||
         padding < 0)
         return false;
@@ -164,13 +166,17 @@ bool ki_td_view_visible_cells(const ki_td_view *view,
     screen_right = (double)screen_bounds.x + (double)screen_bounds.width;
     screen_bottom = (double)screen_bounds.y + (double)screen_bounds.height;
     logical_left = ((double)screen_bounds.x - (double)view->origin_x -
-                    (double)view->offset_x) / (double)view->scale;
+                    (double)view->offset_x) / (double)view->scale -
+                   (double)grid_origin_x;
     logical_top = ((double)screen_bounds.y - (double)view->origin_y -
-                   (double)view->offset_y) / (double)view->scale;
+                   (double)view->offset_y) / (double)view->scale -
+                  (double)grid_origin_y;
     logical_right = (screen_right - (double)view->origin_x -
-                     (double)view->offset_x) / (double)view->scale;
+                     (double)view->offset_x) / (double)view->scale -
+                    (double)grid_origin_x;
     logical_bottom = (screen_bottom - (double)view->origin_y -
-                      (double)view->offset_y) / (double)view->scale;
+                      (double)view->offset_y) / (double)view->scale -
+                     (double)grid_origin_y;
     if (!isfinite(logical_left) || !isfinite(logical_top) ||
         !isfinite(logical_right) || !isfinite(logical_bottom))
         return false;
