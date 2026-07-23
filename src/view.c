@@ -109,6 +109,91 @@ float ki_td_screen_scale(const ki_td_view *view, float logical_length)
     return logical_length * view->scale;
 }
 
+bool ki_td_screen_to_logical(const ki_td_view *view, float screen_x,
+                             float screen_y, float *logical_x,
+                             float *logical_y)
+{
+    float x;
+    float y;
+    if (!view || !logical_x || !logical_y || !isfinite(screen_x) ||
+        !isfinite(screen_y) || !isfinite(view->scale) ||
+        view->scale <= 0.0f)
+        return false;
+    x = (screen_x - (float)view->origin_x - (float)view->offset_x) /
+        view->scale;
+    y = (screen_y - (float)view->origin_y - (float)view->offset_y) /
+        view->scale;
+    if (!isfinite(x) || !isfinite(y)) return false;
+    *logical_x = x;
+    *logical_y = y;
+    return true;
+}
+
+static int clipped_grid_edge(double logical, int cell_size, int limit,
+                             bool upper)
+{
+    double edge = logical / (double)cell_size;
+    double rounded = upper ? ceil(edge) : floor(edge);
+    if (rounded <= 0.0) return 0;
+    if (rounded >= (double)limit) return limit;
+    return (int)rounded;
+}
+
+bool ki_td_view_visible_cells(const ki_td_view *view,
+                              ki_td_rect screen_bounds,
+                              int cell_width, int cell_height,
+                              int columns, int rows, int padding,
+                              ki_td_cell_bounds *bounds)
+{
+    double screen_right;
+    double screen_bottom;
+    double logical_left;
+    double logical_top;
+    double logical_right;
+    double logical_bottom;
+    int first_column;
+    int first_row;
+    int last_column;
+    int last_row;
+    if (!view || !bounds || !rect_is_valid(screen_bounds) ||
+        !isfinite(view->scale) || view->scale <= 0.0f ||
+        cell_width <= 0 || cell_height <= 0 || columns <= 0 || rows <= 0 ||
+        padding < 0)
+        return false;
+
+    screen_right = (double)screen_bounds.x + (double)screen_bounds.width;
+    screen_bottom = (double)screen_bounds.y + (double)screen_bounds.height;
+    logical_left = ((double)screen_bounds.x - (double)view->origin_x -
+                    (double)view->offset_x) / (double)view->scale;
+    logical_top = ((double)screen_bounds.y - (double)view->origin_y -
+                   (double)view->offset_y) / (double)view->scale;
+    logical_right = (screen_right - (double)view->origin_x -
+                     (double)view->offset_x) / (double)view->scale;
+    logical_bottom = (screen_bottom - (double)view->origin_y -
+                      (double)view->offset_y) / (double)view->scale;
+    if (!isfinite(logical_left) || !isfinite(logical_top) ||
+        !isfinite(logical_right) || !isfinite(logical_bottom))
+        return false;
+
+    first_column = clipped_grid_edge(logical_left, cell_width, columns,
+                                     false);
+    first_row = clipped_grid_edge(logical_top, cell_height, rows, false);
+    last_column = clipped_grid_edge(logical_right, cell_width, columns, true);
+    last_row = clipped_grid_edge(logical_bottom, cell_height, rows, true);
+    first_column = first_column > padding ? first_column - padding : 0;
+    first_row = first_row > padding ? first_row - padding : 0;
+    last_column = last_column < columns - padding ?
+        last_column + padding : columns;
+    last_row = last_row < rows - padding ? last_row + padding : rows;
+    if (last_column < first_column) last_column = first_column;
+    if (last_row < first_row) last_row = first_row;
+    *bounds = (ki_td_cell_bounds){
+        first_column, first_row, last_column - first_column,
+        last_row - first_row
+    };
+    return true;
+}
+
 static uint32_t visual_noise(uint32_t value)
 {
     value ^= value >> 16;

@@ -28,6 +28,9 @@ static void test_fit_and_transform(void)
 {
     ki_td_fit_spec spec;
     ki_td_view view = {0};
+    ki_td_cell_bounds bounds;
+    float logical_x;
+    float logical_y;
     EXPECT(!ki_td_fit_spec_init(NULL, 1, 1, 1, 1));
     EXPECT(!ki_td_fit_spec_init(&spec, 0, 1, 1, 1));
     EXPECT(ki_td_fit_spec_init(&spec, 256, 176, 960, 540));
@@ -49,6 +52,12 @@ static void test_fit_and_transform(void)
     ki_td_view_set_offset(&view, -3, 4);
     EXPECT(ki_td_screen_x(&view, 12.25f) == 246);
     EXPECT(ki_td_screen_y(&view, 5.0f) == 140);
+    EXPECT(ki_td_screen_to_logical(&view, 246.0f, 140.0f,
+                                   &logical_x, &logical_y));
+    EXPECT(fabsf(logical_x - 12.5f) < 0.0001f);
+    EXPECT(fabsf(logical_y - 5.0f) < 0.0001f);
+    EXPECT(!ki_td_screen_to_logical(NULL, 0.0f, 0.0f,
+                                    &logical_x, &logical_y));
 
     EXPECT(ki_td_fit_spec_init(&spec, 100, 100, 150, 170));
     spec.scale_policy = KI_TD_SCALE_PIXEL_ART;
@@ -73,6 +82,19 @@ static void test_fit_and_transform(void)
     view = (ki_td_view){.scale = 2.0f, .origin_x = 10, .origin_y = 20};
     EXPECT(ki_td_screen_x(&view, -0.25f) == 10);
     EXPECT(ki_td_screen_x(&view, -0.75f) == 9);
+    EXPECT(ki_td_view_visible_cells(
+        &view, (ki_td_rect){10, 20, 40, 20}, 5, 5, 10, 8, 0, &bounds));
+    EXPECT(bounds.first_column == 0 && bounds.first_row == 0);
+    EXPECT(bounds.column_count == 4 && bounds.row_count == 2);
+    EXPECT(ki_td_view_visible_cells(
+        &view, (ki_td_rect){20, 30, 20, 20}, 5, 5, 10, 8, 1, &bounds));
+    EXPECT(bounds.first_column == 0 && bounds.first_row == 0);
+    EXPECT(bounds.column_count == 4 && bounds.row_count == 4);
+    EXPECT(ki_td_view_visible_cells(
+        &view, (ki_td_rect){200, 200, 20, 20}, 5, 5, 10, 8, 0, &bounds));
+    EXPECT(bounds.column_count == 0 && bounds.row_count == 0);
+    EXPECT(!ki_td_view_visible_cells(
+        &view, (ki_td_rect){0, 0, 0, 20}, 5, 5, 10, 8, 0, &bounds));
 }
 
 static void test_shake(void)

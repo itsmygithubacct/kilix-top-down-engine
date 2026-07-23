@@ -84,6 +84,11 @@ nine-slice panels, row-major tile batches, and caller-buffered stable sprite
 layer ordering all render without allocating. The adapter intentionally does
 not reinterpret these bytes as `soft-raster`'s premultiplied canvas format.
 
+The view API also provides checked screen-to-logical inversion and clipped
+visible-cell bounds. Games can use those helpers with `kilix-world` for
+pointer picking and tile culling while keeping navigation and map semantics
+outside the renderer.
+
 See [integration.md](docs/integration.md) for lifecycle, resize, draw order,
 and ownership guidance.
 

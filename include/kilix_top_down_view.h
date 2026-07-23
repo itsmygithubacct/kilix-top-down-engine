@@ -25,6 +25,21 @@ int ki_td_screen_x(const ki_td_view *view, float logical_x);
 int ki_td_screen_y(const ki_td_view *view, float logical_y);
 float ki_td_screen_scale(const ki_td_view *view, float logical_length);
 
+/* Inverts the orthographic view transform without clamping to the logical
+ * scene. This is suitable for pointer picking and viewport calculations. */
+bool ki_td_screen_to_logical(const ki_td_view *view, float screen_x,
+                             float screen_y, float *logical_x,
+                             float *logical_y);
+
+/* Returns the clipped row/column range intersecting screen_bounds. Counts may
+ * be zero when the viewport misses the grid. padding expands the result by a
+ * caller-selected number of cells before clipping. */
+bool ki_td_view_visible_cells(const ki_td_view *view,
+                              ki_td_rect screen_bounds,
+                              int cell_width, int cell_height,
+                              int columns, int rows, int padding,
+                              ki_td_cell_bounds *bounds);
+
 /* Frame-derived visual shake. It does not consume or mutate game RNG state. */
 int ki_td_shake_axis(uint32_t frame, float magnitude, uint32_t salt);
 
