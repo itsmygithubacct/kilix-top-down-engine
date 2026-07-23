@@ -21,6 +21,8 @@ bool ki_td_fit_spec_init(ki_td_fit_spec *spec, int logical_width,
 bool ki_td_view_fit(ki_td_view *view, const ki_td_fit_spec *spec);
 
 void ki_td_view_set_offset(ki_td_view *view, int x, int y);
+/* Coordinate helpers return zero when the view or result is not
+ * representable. */
 int ki_td_screen_x(const ki_td_view *view, float logical_x);
 int ki_td_screen_y(const ki_td_view *view, float logical_y);
 float ki_td_screen_scale(const ki_td_view *view, float logical_length);

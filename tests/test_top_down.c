@@ -1,6 +1,8 @@
 #include "kilix_top_down.h"
 
+#include <float.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -120,6 +122,37 @@ static void test_shake(void)
     EXPECT(y >= -3 && y <= 3);
     EXPECT(ki_td_shake_axis(1u, 0.0f, 2u) == 0);
     EXPECT(ki_td_shake_axis(1u, -1.0f, 2u) == 0);
+}
+
+static void test_extreme_numeric_inputs(void)
+{
+    ki_td_fit_spec spec;
+    ki_td_view view = {
+        .logical_width = 7,
+        .logical_height = 9,
+        .scale = 1.0f,
+        .origin_x = 11,
+        .origin_y = 13
+    };
+    ki_td_view original = view;
+
+    EXPECT(ki_td_fit_spec_init(&spec, 100, 100, 100, 100));
+    spec.minimum_scale = FLT_MAX;
+    EXPECT(!ki_td_view_fit(&view, &spec));
+    EXPECT(memcmp(&view, &original, sizeof view) == 0);
+
+    view = (ki_td_view){.scale = 1.0f};
+    EXPECT(ki_td_screen_x(&view, FLT_MAX) == 0);
+    EXPECT(ki_td_screen_y(&view, -FLT_MAX) == 0);
+    view.origin_x = INT_MAX;
+    view.offset_x = 1;
+    EXPECT(ki_td_screen_x(&view, 0.0f) == 0);
+    view = (ki_td_view){.scale = 2.0f};
+    EXPECT(ki_td_screen_scale(&view, FLT_MAX) == 0.0f);
+    view.scale = INFINITY;
+    EXPECT(ki_td_screen_x(&view, 1.0f) == 0);
+    EXPECT(ki_td_screen_scale(&view, 1.0f) == 0.0f);
+    EXPECT(ki_td_shake_axis(0u, FLT_MAX, 0u) == 0);
 }
 
 static void test_renderer_lifetime(void)
@@ -283,6 +316,7 @@ int main(void)
 {
     test_fit_and_transform();
     test_shake();
+    test_extreme_numeric_inputs();
     test_renderer_lifetime();
     test_adapter();
     test_atlas_and_layers();
